@@ -15,9 +15,10 @@ Usage:
     python memory_capsule_workflow.py
 """
 
-import os
 import json
-from datetime import datetime, timezone, timedelta
+import os
+from datetime import datetime, timedelta, timezone
+
 from dotenv import load_dotenv
 from firecrawl import FirecrawlApp
 
@@ -99,6 +100,26 @@ def write_evidence(capsule: dict, url: str, fact: str, ttl_sec: int = 86400) -> 
     )
 
 
+def extract_search_urls(search_result) -> list[str]:
+    """Extract candidate URLs from a SearchData result."""
+    urls: list[str] = []
+    for item in getattr(search_result, "web", []) or []:
+        url = getattr(item, "url", None)
+        if url:
+            urls.append(url)
+    return urls
+
+
+def select_map_target(map_result, objective: str) -> str | None:
+    """Choose the best mapped URL for the objective keywords."""
+    keywords = objective.lower().split()
+    for link in getattr(map_result, "links", []) or []:
+        link_url = getattr(link, "url", None)
+        if link_url and any(keyword in link_url.lower() for keyword in keywords):
+            return link_url
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Workflow
 # ---------------------------------------------------------------------------
@@ -143,14 +164,8 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     # ------------------------------------------------------------------
     print(f"[step 2] no cached evidence — running search for: {objective}")
     search_query = f"site:{target_domain} {objective}"
-    search_result = fc.search(search_query, params={"limit": 5})
-
-    discovered_urls = []
-    if search_result and search_result.get("data"):
-        for item in search_result["data"]:
-            url = item.get("url") or item.get("metadata", {}).get("sourceURL")
-            if url:
-                discovered_urls.append(url)
+    search_result = fc.search(search_query, limit=5)
+    discovered_urls = extract_search_urls(search_result)
 
     if not discovered_urls:
         print("[step 2] search returned no results — falling back to root URL")
@@ -167,15 +182,11 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     if map_hint and len(discovered_urls) == 1 and discovered_urls[0] == root_url:
         print(f"[step 3] map hint active: '{map_hint}'")
         print(f"[step 3] running map on {root_url} to find relevant page")
-        map_result = fc.map_url(root_url, params={"limit": 20})
-        if map_result and map_result.get("links"):
-            # Prefer URLs containing the objective keywords
-            keywords = objective.lower().split()
-            for link in map_result["links"]:
-                if any(kw in link.lower() for kw in keywords):
-                    target_url = link
-                    print(f"[step 3] map matched: {target_url}")
-                    break
+        map_result = fc.map(root_url, limit=20)
+        mapped_url = select_map_target(map_result, objective)
+        if mapped_url:
+            target_url = mapped_url
+            print(f"[step 3] map matched: {target_url}")
     else:
         print(f"[step 3] using search result directly: {target_url}")
 
@@ -183,11 +194,11 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     # Step 4 — scrape the resolved URL
     # ------------------------------------------------------------------
     print(f"[step 4] scraping: {target_url}")
-    scrape_result = fc.scrape_url(target_url, params={"formats": ["markdown"]})
+    scrape_result = fc.scrape(target_url, formats=["markdown"])
 
     content_preview = ""
-    if scrape_result and scrape_result.get("markdown"):
-        content_preview = scrape_result["markdown"][:300].replace("\n", " ")
+    if scrape_result and getattr(scrape_result, "markdown", None):
+        content_preview = scrape_result.markdown[:300].replace("\n", " ")
 
     # ------------------------------------------------------------------
     # Step 5 — write evidence back
