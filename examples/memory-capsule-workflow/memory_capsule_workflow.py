@@ -182,7 +182,9 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     if map_hint and len(discovered_urls) == 1 and discovered_urls[0] == root_url:
         print(f"[step 3] map hint active: '{map_hint}'")
         print(f"[step 3] running map on {root_url} to find relevant page")
-        map_result = fc.map(root_url, limit=20)
+        # Pass correlationId so the response can be matched back to this capsule.
+        # Firecrawl echoes it unchanged — it is not stored or interpreted server-side.
+        map_result = fc.map(root_url, limit=20, params={"correlationId": capsule["capsule_id"]})
         mapped_url = select_map_target(map_result, objective)
         if mapped_url:
             target_url = mapped_url
@@ -194,7 +196,18 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     # Step 4 — scrape the resolved URL
     # ------------------------------------------------------------------
     print(f"[step 4] scraping: {target_url}")
-    scrape_result = fc.scrape(target_url, formats=["markdown"])
+    # correlationId lets the caller verify this response belongs to the current capsule
+    # even when multiple concurrent scrapes are in flight.
+    scrape_result = fc.scrape(
+        target_url,
+        formats=["markdown"],
+        params={"correlationId": capsule["capsule_id"]},
+    )
+
+    # Confirm the echo — Firecrawl returns correlationId unchanged in the response.
+    echoed_id = (scrape_result or {}).get("correlationId") if isinstance(scrape_result, dict) else None
+    if echoed_id:
+        print(f"[step 4] correlationId echoed: {echoed_id}")
 
     content_preview = ""
     if scrape_result and getattr(scrape_result, "markdown", None):
