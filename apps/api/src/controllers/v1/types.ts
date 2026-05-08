@@ -787,6 +787,7 @@ const scrapeRequestSchemaBase = baseScrapeOptions
     integration: integrationSchema.optional().transform(val => val || null),
     timeout: z.int().positive().min(1000).prefault(30000),
     zeroDataRetention: z.boolean().optional(),
+    correlationId: z.string().max(255).optional(),
   })
   .strict();
 
@@ -959,6 +960,7 @@ const mapRequestSchemaBase = crawlerOptions
     ignoreCache: z.boolean().prefault(false),
     location: locationSchema,
     headers: z.record(z.string(), z.string()).optional(),
+    correlationId: z.string().max(255).optional(),
   });
 
 export const mapRequestSchema = mapRequestSchemaBase.strict();
@@ -1093,6 +1095,7 @@ export type ScrapeResponse =
       warning?: string;
       data: Document;
       scrape_id?: string;
+      correlationId?: string;
     };
 
 export interface URLTrace {
@@ -1154,6 +1157,7 @@ export type MapResponse =
       success: true;
       links: string[];
       scrape_id?: string;
+      correlationId?: string;
     };
 
 export type CrawlStatusParams = {
@@ -1531,6 +1535,7 @@ export const searchRequestSchema = z
     timeout: z.int().positive().finite().prefault(60000),
     ignoreInvalidURLs: z.boolean().optional().prefault(false),
     __searchPreviewToken: z.string().optional(),
+    correlationId: z.string().max(255).optional(),
     scrapeOptions: baseScrapeOptions
       .extend({
         formats: z
@@ -1570,6 +1575,7 @@ export type SearchResponse =
       warning?: string;
       data: Document[];
       id: string;
+      correlationId?: string;
     };
 
 export type TokenUsage = {

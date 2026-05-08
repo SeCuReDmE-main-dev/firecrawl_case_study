@@ -229,6 +229,7 @@ class V1ScrapeResponse(V1FirecrawlDocument[T], Generic[T]):
     success: bool = True
     warning: Optional[str] = None
     error: Optional[str] = None
+    correlationId: Optional[str] = None
 
 class V1BatchScrapeResponse(pydantic.BaseModel):
     """Response from batch scrape operations."""
@@ -310,12 +311,14 @@ class V1MapParams(pydantic.BaseModel):
     timeout: Optional[int] = 30000
     useIndex: Optional[bool] = None
     location: Optional[V1LocationConfig] = None
+    correlationId: Optional[str] = None
 
 class V1MapResponse(pydantic.BaseModel):
     """Response from mapping operations."""
     success: bool = True
     links: Optional[List[str]] = None
     error: Optional[str] = None
+    correlationId: Optional[str] = None
 
 class V1ExtractParams(pydantic.BaseModel):
     """Parameters for extracting information from URLs."""
@@ -354,6 +357,7 @@ class V1SearchParams(pydantic.BaseModel):
     origin: Optional[str] = "api"
     timeout: Optional[int] = 60000
     scrapeOptions: Optional[V1ScrapeOptions] = None
+    correlationId: Optional[str] = None
 
 class V1SearchResponse(pydantic.BaseModel):
     """Response from search operations."""
@@ -361,6 +365,7 @@ class V1SearchResponse(pydantic.BaseModel):
     data: List[V1FirecrawlDocument]
     warning: Optional[str] = None
     error: Optional[str] = None
+    correlationId: Optional[str] = None
 
 class V1CreditUsageData(pydantic.BaseModel):
     remaining_credits: int
@@ -479,6 +484,7 @@ class V1SearchResponse(pydantic.BaseModel):
     data: List[Dict[str, Any]]
     warning: Optional[str] = None
     error: Optional[str] = None
+    correlationId: Optional[str] = None
 
 class V1ExtractParams(pydantic.BaseModel):
     """
@@ -677,7 +683,10 @@ class V1FirecrawlApp:
             try:
                 response_json = response.json()
                 if response_json.get('success') and 'data' in response_json:
-                    return V1ScrapeResponse(**response_json['data'])
+                    payload = dict(response_json['data'])
+                    if 'correlationId' in response_json:
+                        payload['correlationId'] = response_json['correlationId']
+                    return V1ScrapeResponse(**payload)
                 elif "error" in response_json:
                     raise Exception(f'Failed to scrape URL. Error: {response_json["error"]}')
                 else:
@@ -2870,12 +2879,12 @@ class V1FirecrawlApp:
         method_params = {
             "scrape_url": {"formats", "include_tags", "exclude_tags", "only_main_content", "wait_for", 
                           "timeout", "location", "mobile", "skip_tls_verification", "remove_base64_images",
-                          "block_ads", "proxy", "extract", "json_options", "actions", "change_tracking_options", "max_age", "integration"},
-            "search": {"limit", "tbs", "filter", "lang", "country", "location", "timeout", "scrape_options", "integration"},
+                          "block_ads", "proxy", "extract", "json_options", "actions", "change_tracking_options", "max_age", "integration", "correlationId"},
+            "search": {"limit", "tbs", "filter", "lang", "country", "location", "timeout", "scrape_options", "integration", "correlationId"},
             "crawl_url": {"include_paths", "exclude_paths", "max_depth", "max_discovery_depth", "limit",
                          "allow_backward_links", "allow_external_links", "ignore_sitemap", "scrape_options",
                          "webhook", "deduplicate_similar_urls", "ignore_query_parameters", "regex_on_full_url", "integration"},
-            "map_url": {"search", "ignore_sitemap", "include_subdomains", "sitemap_only", "limit", "timeout", "integration"},
+            "map_url": {"search", "ignore_sitemap", "include_subdomains", "sitemap_only", "limit", "timeout", "integration", "correlationId"},
             "extract": {"prompt", "schema", "system_prompt", "allow_external_links", "enable_web_search", "show_sources", "agent", "integration"},
             "batch_scrape_urls": {"formats", "headers", "include_tags", "exclude_tags", "only_main_content",
                                  "wait_for", "timeout", "location", "mobile", "skip_tls_verification",
@@ -3736,7 +3745,10 @@ class AsyncV1FirecrawlApp(V1FirecrawlApp):
         )
 
         if response.get('success') and 'data' in response:
-            return V1ScrapeResponse(**response['data'])
+            payload = dict(response['data'])
+            if 'correlationId' in response:
+                payload['correlationId'] = response['correlationId']
+            return V1ScrapeResponse(**payload)
         elif "error" in response:
             raise Exception(f'Failed to scrape URL. Error: {response["error"]}')
         else:

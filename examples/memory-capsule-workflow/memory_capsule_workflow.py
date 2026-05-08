@@ -101,10 +101,13 @@ def write_evidence(capsule: dict, url: str, fact: str, ttl_sec: int = 86400) -> 
 
 
 def extract_search_urls(search_result) -> list[str]:
-    """Extract candidate URLs from a SearchData result."""
+    """Extract candidate URLs from a v1 search result."""
     urls: list[str] = []
-    for item in getattr(search_result, "web", []) or []:
-        url = getattr(item, "url", None)
+    for item in getattr(search_result, "data", []) or []:
+        if isinstance(item, dict):
+            url = item.get("url")
+        else:
+            url = getattr(item, "url", None)
         if url:
             urls.append(url)
     return urls
@@ -114,7 +117,7 @@ def select_map_target(map_result, objective: str) -> str | None:
     """Choose the best mapped URL for the objective keywords."""
     keywords = objective.lower().split()
     for link in getattr(map_result, "links", []) or []:
-        link_url = getattr(link, "url", None)
+        link_url = link if isinstance(link, str) else getattr(link, "url", None)
         if link_url and any(keyword in link_url.lower() for keyword in keywords):
             return link_url
     return None
@@ -143,6 +146,7 @@ def run_workflow(objective: str, target_domain: str) -> dict:
         raise EnvironmentError("FIRECRAWL_API_KEY is not set in the environment.")
 
     fc = FirecrawlApp(api_key=api_key)
+    fc_v1 = fc.v1
 
     task_id = f"{target_domain.replace('.', '_')}_research"
     capsule = build_capsule(task_id, objective)
@@ -164,7 +168,11 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     # ------------------------------------------------------------------
     print(f"[step 2] no cached evidence — running search for: {objective}")
     search_query = f"site:{target_domain} {objective}"
-    search_result = fc.search(search_query, limit=5)
+    search_result = fc_v1.search(
+        search_query,
+        limit=5,
+        correlationId=capsule["capsule_id"],
+    )
     discovered_urls = extract_search_urls(search_result)
 
     if not discovered_urls:
@@ -182,7 +190,13 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     if map_hint and len(discovered_urls) == 1 and discovered_urls[0] == root_url:
         print(f"[step 3] map hint active: '{map_hint}'")
         print(f"[step 3] running map on {root_url} to find relevant page")
-        map_result = fc.map(root_url, limit=20)
+        # Pass correlationId so the response can be matched back to this capsule.
+        # Firecrawl echoes it unchanged — it is not stored or interpreted server-side.
+        map_result = fc_v1.map_url(
+            root_url,
+            limit=20,
+            correlationId=capsule["capsule_id"],
+        )
         mapped_url = select_map_target(map_result, objective)
         if mapped_url:
             target_url = mapped_url
@@ -194,7 +208,18 @@ def run_workflow(objective: str, target_domain: str) -> dict:
     # Step 4 — scrape the resolved URL
     # ------------------------------------------------------------------
     print(f"[step 4] scraping: {target_url}")
-    scrape_result = fc.scrape(target_url, formats=["markdown"])
+    # correlationId lets the caller verify this response belongs to the current capsule
+    # even when multiple concurrent scrapes are in flight.
+    scrape_result = fc_v1.scrape_url(
+        target_url,
+        formats=["markdown"],
+        correlationId=capsule["capsule_id"],
+    )
+
+    # Confirm the echo — Firecrawl returns correlationId unchanged in the response.
+    echoed_id = getattr(scrape_result, "correlationId", None)
+    if echoed_id:
+        print(f"[step 4] correlationId echoed: {echoed_id}")
 
     content_preview = ""
     if scrape_result and getattr(scrape_result, "markdown", None):

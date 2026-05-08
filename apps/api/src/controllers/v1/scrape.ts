@@ -310,5 +310,6 @@ export async function scrapeController(
       },
     },
     scrape_id: origin?.includes("website") ? jobId : undefined,
+    correlationId: req.body.correlationId,
   });
 }

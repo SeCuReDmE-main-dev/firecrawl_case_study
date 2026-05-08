@@ -191,26 +191,77 @@ Keep capsules small. Prefer hints with explicit confidence scores. Discard low-c
 ## What This Pattern Is Not
 
 - **Not a built-in agent memory in Firecrawl.** Firecrawl does not store, read, or interpret Memory Capsules.  
-- **Not a new Firecrawl API parameter.** No endpoint is changed.  
 - **Not a general-purpose vector database.** The capsule is a compiled, task-scoped payload, not a queryable store.  
 - **Not an agent framework.** This pattern is orchestration-layer guidance, not a product feature.  
 - **Not a persona or identity system.** The capsule holds task-relevant hints, not agent personalities.  
 
 ---
 
+## Phase 2 Extension: correlationId Passthrough
+
+Phase 2 adds one small optional field — `correlationId` — to the `/v1/scrape`, `/v1/map`, and `/v1/search` request schemas.
+
+### What it does
+
+An orchestrator may attach a short string (max 255 characters) to a request:
+
+```json
+{
+  "url": "https://example.com/pricing",
+  "correlationId": "mc_task_pricing_001"
+}
+```
+
+Firecrawl echoes it unchanged in the success response:
+
+```json
+{
+  "success": true,
+  "correlationId": "mc_task_pricing_001",
+  "data": { ... }
+}
+```
+
+### What it does not do
+
+- Firecrawl does not parse, interpret, or act on `correlationId`.  
+- It is not stored server-side beyond the response.  
+- It is not propagated between jobs (e.g. a crawl job does not forward it to child scrapes).  
+- It does not change billing, routing, or execution behavior.  
+
+### Why it helps external orchestrators
+
+Without `correlationId`, an orchestrator that fires multiple concurrent Firecrawl calls must match responses back to its internal task state by URL alone — which breaks when the same URL is requested in multiple tasks.
+
+With `correlationId`, the orchestrator can tag each call with its internal task or capsule identifier. The echo in the response closes the loop without requiring the orchestrator to maintain a side-table of pending request IDs.
+
+Example use in a Memory Capsule workflow:
+
+```python
+result = firecrawl.v1.scrape_url(
+    "https://example.com/pricing",
+    formats=["markdown"],
+    correlationId=capsule["capsule_id"],
+)
+# result.correlationId == capsule["capsule_id"]
+# safe to write evidence back to the correct capsule
+write_evidence(capsule, result.metadata["sourceURL"], ...)
+```
+
+---
+
 ## Phase 1 Scope and Limitations
 
-This document and the companion example under `examples/memory-capsule-workflow/` represent Phase 1 only.
+This document and the companion example under `examples/memory-capsule-workflow/` were Phase 1.
 
-Phase 1 intentionally excludes:
+Phase 1 intentionally excluded:
 
 - any change to Firecrawl's API endpoints or worker logic
 - a built-in memory SDK or library
-- opaque metadata passthrough on Firecrawl requests
 - replay or continuity hooks between `scrape` and `interact` sessions
 - a structured memory store implementation
 
-These are open questions for later phases, contingent on maintainer feedback and demonstrated need.
+Phase 2 added `correlationId` passthrough only. Everything else remains out of scope.
 
 ---
 

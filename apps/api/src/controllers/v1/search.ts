@@ -256,7 +256,10 @@ export async function searchController(
       scrapeful: shouldScrape,
     });
 
-    return res.status(200).json(responseData);
+    return res.status(200).json({
+      ...responseData,
+      correlationId: req.body.correlationId,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       logger.warn("Invalid request body", { error: error.issues });

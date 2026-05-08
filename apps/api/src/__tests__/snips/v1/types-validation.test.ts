@@ -931,4 +931,83 @@ describe("V1 Types Validation", () => {
       );
     });
   });
+
+  describe("correlationId passthrough", () => {
+    it("scrapeRequestSchema accepts correlationId and preserves it", () => {
+      const result = scrapeRequestSchema.parse({
+        url: "https://example.com",
+        correlationId: "mc_task_pricing_001",
+      });
+      expect(result.correlationId).toBe("mc_task_pricing_001");
+    });
+
+    it("scrapeRequestSchema omits correlationId when absent", () => {
+      const result = scrapeRequestSchema.parse({
+        url: "https://example.com",
+      });
+      expect(result.correlationId).toBeUndefined();
+    });
+
+    it("scrapeRequestSchema rejects correlationId longer than 255 chars", () => {
+      expect(() =>
+        scrapeRequestSchema.parse({
+          url: "https://example.com",
+          correlationId: "x".repeat(256),
+        }),
+      ).toThrow();
+    });
+
+    it("scrapeRequestSchema accepts correlationId of exactly 255 chars", () => {
+      const result = scrapeRequestSchema.parse({
+        url: "https://example.com",
+        correlationId: "x".repeat(255),
+      });
+      expect(result.correlationId).toHaveLength(255);
+    });
+
+    it("mapRequestSchema accepts correlationId and preserves it", () => {
+      const result = mapRequestSchema.parse({
+        url: "https://example.com",
+        correlationId: "mc_task_map_001",
+      });
+      expect(result.correlationId).toBe("mc_task_map_001");
+    });
+
+    it("mapRequestSchema omits correlationId when absent", () => {
+      const result = mapRequestSchema.parse({
+        url: "https://example.com",
+      });
+      expect(result.correlationId).toBeUndefined();
+    });
+
+    it("mapRequestSchema rejects correlationId longer than 255 chars", () => {
+      expect(() =>
+        mapRequestSchema.parse({
+          url: "https://example.com",
+          correlationId: "x".repeat(256),
+        }),
+      ).toThrow();
+    });
+
+    it("existing scrape clients are unaffected (no correlationId in request)", () => {
+      // Existing callers that do not send correlationId must continue to work
+      const result = scrapeRequestSchema.parse({
+        url: "https://example.com",
+        formats: ["markdown", "html"],
+        onlyMainContent: false,
+        timeout: 60000,
+      });
+      expect(result.url).toBe("https://example.com");
+      expect(result.correlationId).toBeUndefined();
+    });
+
+    it("existing map clients are unaffected (no correlationId in request)", () => {
+      const result = mapRequestSchema.parse({
+        url: "https://example.com",
+        limit: 100,
+      });
+      expect(result.url).toBe("https://example.com");
+      expect(result.correlationId).toBeUndefined();
+    });
+  });
 });
