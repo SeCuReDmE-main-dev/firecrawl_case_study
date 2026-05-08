@@ -69,7 +69,7 @@ Its lifetime is one task execution.
   "scope": {
     "agent_id": "research-bot",
     "task_id": "compare-pricing",
-    "expires_at": "2026-05-08T22:00:00Z"
+    "expires_at": "2026-05-08T22:00:00+00:00"
   },
   "policies": {
     "freshness_required": true,
@@ -96,7 +96,7 @@ Its lifetime is one task execution.
     {
       "url": "https://example.com/pricing",
       "fact": "pricing page confirmed reachable",
-      "captured_at": "2026-05-08T18:00:00Z",
+      "captured_at": "2026-05-08T18:00:00+00:00",
       "freshness_ttl_sec": 86400
     }
   ]
