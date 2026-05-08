@@ -238,13 +238,14 @@ With `correlationId`, the orchestrator can tag each call with its internal task 
 Example use in a Memory Capsule workflow:
 
 ```python
-result = firecrawl.scrape_url(
+result = firecrawl.v1.scrape_url(
     "https://example.com/pricing",
-    params={"correlationId": capsule["capsule_id"]}
+    formats=["markdown"],
+    correlationId=capsule["capsule_id"],
 )
-# result["correlationId"] == capsule["capsule_id"]
+# result.correlationId == capsule["capsule_id"]
 # safe to write evidence back to the correct capsule
-write_evidence(capsule, result["data"]["metadata"]["sourceURL"], ...)
+write_evidence(capsule, result.metadata["sourceURL"], ...)
 ```
 
 ---
